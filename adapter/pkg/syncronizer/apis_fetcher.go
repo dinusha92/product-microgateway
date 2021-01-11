@@ -12,12 +12,15 @@
  *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
- *
  */
 
-// Package microgateway contains the adapter bootstrap implementation.
-// This includes loading configurations and starting the adapter.
-package microgateway
+/*
+ * Package "synchronizer" contains artifacts relate to fetching APIs and
+ * API related updates from the API manager event-hub.
+ * This file contains operates to retrieve APIs and API updates.
+ */
+
+package synchronizer
 
 import (
 	"archive/zip"
@@ -29,34 +32,35 @@ import (
 	"net/http"
 	"strings"
 
-	logger "github.com/sirupsen/logrus"
-	"github.com/wso2/micro-gw/config"
-	"github.com/wso2/micro-gw/pkg/mgw"
-
 	xds "github.com/wso2/micro-gw/pkg/xds"
 )
 
-func initServer() error {
-	return nil
-}
+//do the API call
+// There is 2 ways API call should be done
+// 1.
 
-// StartMicroGateway reads the configuration files and then start the adapter components.
-// Commandline arguments needs to be provided as args
-func StartMicroGateway(args []string) {
+//
 
-	logger.Info("Starting Microgateway")
-	err := initServer()
-	if err != nil {
-		logger.Fatal("Error starting the adapter", err)
-	}
-	conf, errReadConfig := config.ReadConfigs()
-	if errReadConfig != nil {
-		logger.Fatal("Error loading configuration. ", errReadConfig)
-	}
-	mgw.Run(conf)
+// func loadAPIs() (bool, error) {
 
-}
+// 	url := "https://localhost:9443/internal/data/v1/runtime-artifacts?gatewayLabel=Production%20and%20Sandbox&type=Envoy"
+// 	response, err := http.Get(url)
+// 	if err != nil {
+// 		fmt.Printf("Error occurred while calling the API")
+// 	}
 
+// 	defer response.Body.Close()
+
+// 	return false, fmt.Errorf("error occurred while loading APIs")
+// }
+
+/*
+ * This method will fetch the APIs from the API Manager
+ * Todo: As of now, it will retireve all the APIs from the API Manager
+ * It also should have the capability to fetch a single API upon update
+ * event
+ *
+ */
 func fetchAPIs() []byte {
 	// URL has to be taken from a config, config toml already has this
 	url := "https://localhost:9443/internal/data/v1/runtime-artifacts"
