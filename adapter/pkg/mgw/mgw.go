@@ -21,6 +21,7 @@ package mgw
 import (
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	xdsv3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
+	apiServer "github.com/wso2/micro-gw/pkg/api"
 	"github.com/wso2/micro-gw/pkg/api/restserver"
 
 	"context"
@@ -150,7 +151,7 @@ OUTER:
 func fetchAPIs() []byte {
 	// URL has to be taken from a config, config toml already has this
 	url := "https://172.17.0.1:9443/internal/data/v1/runtime-artifacts"
-	logger.LoggerMgw.Info("Starting URL ....")
+	logger.LoggerMgw.Info("URL defined to download file ....")
 
 	insecure := false
 	// Create the request
@@ -178,21 +179,21 @@ func fetchAPIs() []byte {
 	q.Add("gatewayLabel", "Production and Sandbox")
 	q.Add("type", "Envoy")
 	req.URL.RawQuery = q.Encode()
-	logger.LoggerMgw.Info("Starting query ....")
+	logger.LoggerMgw.Info("Preparing query parameters")
 
 	// Setting authorization header
 	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
 	// Make the request
-	logger.LoggerMgw.Info("Starting client ....")
+	logger.LoggerMgw.Info("Starting HTTP client to call API Manager ....")
 
 	resp, err := client.Do(req)
-	logger.LoggerMgw.Info("client invoked ....")
-	logger.LoggerMgw.Info("respo", resp)
-	logger.LoggerMgw.Info("error", err)
+	logger.LoggerMgw.Info("HTTP Client invoked ....")
+	logger.LoggerMgw.Info("Response: ", resp)
+	logger.LoggerMgw.Info("Error:", err)
 
-	fmt.Println(resp.StatusCode)
+	logger.LoggerMgw.Info(resp.StatusCode)
 	if resp.StatusCode == http.StatusOK {
-		fmt.Println("success")
+		logger.LoggerMgw.Info("success")
 		//err = os.Mkdir("/tmp", 0777)
 		if err != nil {
 			log.Fatal("Error creating zip archive", err)
@@ -231,7 +232,7 @@ func applyAPIProject(payload []byte) error {
 		// open the zip files
 		if strings.HasSuffix(file.Name, ".zip") {
 			fmt.Println(file.Name)
-			logger.LoggerMgw.Info("Starting zip reading ....", file.Name)
+			logger.LoggerMgw.Info("Starting Zip file inside apis.zip reading ....", file.Name)
 
 			// Open thezip
 			f, err := file.Open()
@@ -243,24 +244,29 @@ func applyAPIProject(payload []byte) error {
 			defer f.Close()
 			//read the files in a each xxxx-api.zip
 			r, err := ioutil.ReadAll(f)
-			nzip, err := zip.NewReader(bytes.NewReader(r), int64(len(r)))
-			for _, fl := range nzip.File {
-				fmt.Println(fl.Name)
-				logger.LoggerMgw.Info("Starting zip reading inside 1 ....", fl.Name)
-
-				if strings.HasSuffix(fl.Name, "Definitions/swagger.json") {
-					logger.LoggerMgw.Info("Starting zip reading inside ....", fl.Name)
-
-					t, err := fl.Open()
-					h, err := ioutil.ReadAll(t)
-					if err != nil {
-						log.Fatal(err)
-					}
-					logger.LoggerMgw.Info("updating zds ....", t)
-
-					xds.UpdateEnvoy(h)
-				}
+			perr := apiServer.ApplyAPIProject(r)
+			if err != nil {
+				logger.LoggerMgw.Info("Error occurred while applying project", perr)
 			}
+
+			// nzip, err := zip.NewReader(bytes.NewReader(r), int64(len(r)))
+			// for _, fl := range nzip.File {
+			// 	fmt.Println(fl.Name)
+			// 	logger.LoggerMgw.Info("Start reading files inside api zip ....", fl.Name)
+
+			// 	if strings.HasSuffix(fl.Name, "Definitions/swagger.json") {
+			// 		logger.LoggerMgw.Info("Starting swagger....", fl.Name)
+
+			// 		t, err := fl.Open()
+			// 		h, err := ioutil.ReadAll(t)
+			// 		if err != nil {
+			// 			log.Fatal(err)
+			// 		}
+			// 		logger.LoggerMgw.Info("updating zds ....", h)
+
+			// 		xds.UpdateEnvoy(h)
+			// 	}
+			// }
 			// 	// loggers.LoggerAPI.Debugf("openAPI file : %v", file.Name)
 			// 	unzippedFileBytes, err := readZipFile(file)
 			// 	if err != nil {
