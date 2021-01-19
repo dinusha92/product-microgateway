@@ -134,11 +134,6 @@ func Run(conf *config.Config) {
 		logger.LoggerMgw.Info("Error occured while starting:!!!! ", err)
 	}
 	logger.LoggerMgw.Info("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
-<<<<<<< HEAD
-=======
-	runManagementServer(srv, port)
-
->>>>>>> Removing unnecessary logs.
 	go restserver.StartRestServer(conf)
 OUTER:
 	for {
