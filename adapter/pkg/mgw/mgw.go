@@ -114,18 +114,16 @@ func Run(conf *config.Config) {
 	}
 
 	logger.LoggerMgw.Info("Starting adapter ....")
-	logger.LoggerMgw.Info("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
-
 	cache := xds.GetXdsCache()
 	srv := xdsv3.NewServer(ctx, cache, nil)
 
-	runManagementServer(srv, port)
 	err := applyAPIProject(fetchAPIs())
 	logger.LoggerMgw.Info("SSSSSSSSS", err)
 	if err != nil {
 		logger.LoggerMgw.Info("Error occured while starting:!!!! ", err)
 	}
 	logger.LoggerMgw.Info("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
+	runManagementServer(srv, port)
 
 	go restserver.StartRestServer(conf)
 OUTER:
