@@ -118,8 +118,6 @@ func Run(conf *config.Config) {
 	}
 
 	logger.LoggerMgw.Info("Starting adapter ....")
-	logger.LoggerMgw.Info("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
-
 	cache := xds.GetXdsCache()
 	enforcerCache := xds.GetEnforcerCache()
 	srv := xdsv3.NewServer(ctx, cache, nil)
@@ -136,6 +134,11 @@ func Run(conf *config.Config) {
 		logger.LoggerMgw.Info("Error occured while starting:!!!! ", err)
 	}
 	logger.LoggerMgw.Info("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
+<<<<<<< HEAD
+=======
+	runManagementServer(srv, port)
+
+>>>>>>> Removing unnecessary logs.
 	go restserver.StartRestServer(conf)
 OUTER:
 	for {
