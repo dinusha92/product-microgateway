@@ -19,6 +19,9 @@
 package mgw
 
 import (
+	"errors"
+	"log"
+
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	xdsv3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	apiservice "github.com/envoyproxy/go-control-plane/wso2/discovery/service/api"
@@ -36,7 +39,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strings"
 
@@ -128,10 +130,14 @@ func Run(conf *config.Config) {
 	// Set enforcer startup configs
 	xds.UpdateEnforcerConfig(conf)
 
-	err := applyAPIProject(fetchAPIs())
-	logger.LoggerMgw.Info("SSSSSSSSS", err)
-	if err != nil {
-		logger.LoggerMgw.Info("Error occured while starting:!!!! ", err)
+	barry, ferr := fetchAPIs()
+	if ferr != nil {
+		logger.LoggerMgw.Info("Error fetch APIs", ferr)
+	} else {
+		err := applyAPIProject(barry)
+		if err != nil {
+			logger.LoggerMgw.Info("Error occured while starting:!!!! ", err)
+		}
 	}
 	logger.LoggerMgw.Info("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
 	go restserver.StartRestServer(conf)
@@ -156,7 +162,10 @@ OUTER:
 	logger.LoggerMgw.Info("Bye!")
 }
 
-func fetchAPIs() []byte {
+// fetchAPIs pulls the API artifact calling to the API manager
+// API Manager returns a .zip file as a response and this function
+// returns a byte array of that ZIP file.
+func fetchAPIs() ([]byte, error) {
 	// URL has to be taken from a config, config toml already has this
 	url := "https://172.17.0.1:9443/internal/data/v1/runtime-artifacts"
 	logger.LoggerMgw.Info("Starting URL ....")
@@ -190,42 +199,39 @@ func fetchAPIs() []byte {
 	logger.LoggerMgw.Info("Starting query ....")
 
 	// Setting authorization header
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4=")
+	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4")
 	// Make the request
-	logger.LoggerMgw.Info("Starting client ....")
-
 	resp, err := client.Do(req)
-	logger.LoggerMgw.Info("client invoked ....")
-	logger.LoggerMgw.Info("respo", resp)
-	logger.LoggerMgw.Info("error", err)
-
-	fmt.Println(resp.StatusCode)
-	if resp.StatusCode == http.StatusOK {
-		fmt.Println("success")
-		//err = os.Mkdir("/tmp", 0777)
-		if err != nil {
-			log.Fatal("Error creating zip archive", err)
-		}
-		respbytes, err := ioutil.ReadAll(resp.Body)
-		err = ioutil.WriteFile("apis.zip", respbytes, 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
-		return respbytes
-
-	}
+	// In the event of a connection error, the error would not be nil, then return the error
+	// If the error is not null, proceed
 	if err != nil {
-		fmt.Println("Error occurred while calling the API", err)
+		logger.LoggerMgw.Error("Error occurred while retrieving APIs from API manager:", err)
+		return nil, err
 	}
-	fmt.Println("body", resp.Body)
-	return nil
+	logger.LoggerMgw.Info(resp.StatusCode)
+
+	// For sucessful API retrieval, return the apis.zip in a form of byte array
+	respbytes, err := ioutil.ReadAll(resp.Body)
+
+	// If the reading response gives an error
+	if err != nil {
+		fmt.Println("Error occurred while reading the response.", err)
+		return nil, err
+	}
+	// For successful response, return the byte array and nil as error
+	if resp.StatusCode == http.StatusOK {
+		return respbytes, nil
+	}
+	// If the response is not successful, create a new error with the response and log it and return
+	// Ex: for 401 scenarios, 403 scenarios.
+	logger.LoggerMgw.Info("Failure response code:", resp.StatusCode)
+	logger.LoggerMgw.Info("Failure response:", string(respbytes))
+	return nil, errors.New(string(respbytes))
 }
 
-/*
- * Apply the API project to the envoy using xDS APIs
- *
- *
- */
+// applyAPIProject configure the envoy using the API project which takes as
+// an input in the form of a byte array.
+// If the updating envoy fails, it returns an error, if not error would be nil.
 func applyAPIProject(payload []byte) error {
 	// Readubg the root zip
 	zipReader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
@@ -270,18 +276,6 @@ func applyAPIProject(payload []byte) error {
 					xds.UpdateEnvoy(h)
 				}
 			}
-			// 	// loggers.LoggerAPI.Debugf("openAPI file : %v", file.Name)
-			// 	unzippedFileBytes, err := readZipFile(file)
-			// 	if err != nil {
-			// 		loggers.LoggerAPI.Errorf("Error occured while reading the openapi file. %v", err.Error())
-			// 		continue
-			// 	}
-			// 	apiJsn, conversionErr := utills.ToJSON(unzippedFileBytes)
-			// 	if conversionErr != nil {
-			// 		loggers.LoggerAPI.Errorf("Error converting api file to json: %v", err.Error())
-			// 		return conversionErr
-			// 	}
-			//
 		}
 	}
 	return nil
