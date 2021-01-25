@@ -62,16 +62,11 @@ func ApplyAPIProject(payload []byte) error {
 		loggers.LoggerAPI.Errorf("Error occured while unzipping the apictl project. Error: %v", err.Error())
 		return err
 	}
-	loggers.LoggerAPI.Info("File reading now:")
 	// TODO: (VirajSalaka) this won't support for distributed openAPI definition
 	for _, file := range zipReader.File {
 		loggers.LoggerAPI.Debugf("File reading now: %v", file.Name)
-		loggers.LoggerAPI.Infof("File reading now: %v", file.Name)
-
 		if strings.Contains(file.Name, openAPIDir+string(os.PathSeparator)+openAPIFilename) {
 			loggers.LoggerAPI.Debugf("openAPI file : %v", file.Name)
-			loggers.LoggerAPI.Infof("OpenAPI: %v", file.Name)
-
 			unzippedFileBytes, err := readZipFile(file)
 			if err != nil {
 				loggers.LoggerAPI.Errorf("Error occured while reading the openapi file. %v", err.Error())

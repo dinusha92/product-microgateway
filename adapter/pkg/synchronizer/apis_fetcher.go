@@ -105,7 +105,6 @@ func FetchAPIs(id *string, gwLabel *string, c chan []byte) {
 	}
 	// If the gateway label is present, make a query parameter
 	if gwLabel != nil {
-		logger.LoggerSync.Info("GW ", *gwLabel)
 		logger.LoggerSync.Debugf("Gateway Label: %v", *gwLabel)
 		q.Add(gatewayLabel, *gwLabel)
 	}
@@ -115,7 +114,6 @@ func FetchAPIs(id *string, gwLabel *string, c chan []byte) {
 	// Setting authorization header
 	req.Header.Set(authorization, basicAuth)
 	// Make the request
-	logger.LoggerSync.Info("REQUEST", req)
 	logger.LoggerSync.Debug("Sending the controle plane request")
 	resp, err := client.Do(req)
 	// In the event of a connection error, the error would not be nil, then return the error
@@ -149,7 +147,7 @@ func FetchAPIs(id *string, gwLabel *string, c chan []byte) {
 
 // PushAPIProjects configure the envoy using the API project which takes as
 // an input in the form of a byte slice.
-// If the updating envoy fails, it returns an error, if not error would be nil.
+// If the updating envoy or enforcer, it returns an error, if not error would be nil.
 func PushAPIProjects(payload []byte) error {
 	// Reading the root zip
 	zipReader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
@@ -157,8 +155,6 @@ func PushAPIProjects(payload []byte) error {
 		logger.LoggerSync.Errorf("Error occured while unzipping the apictl project. Error: %v", err.Error())
 		return err
 	}
-	logger.LoggerSync.Info("Error", err)
-
 	// TODO: Currently the apis.zip file contains another zip files containing API projects.
 	// But there would be a meta data file in future. Once that comes, this code segement should
 	// handle that meta data file as well.
@@ -166,11 +162,7 @@ func PushAPIProjects(payload []byte) error {
 	// Read the .zip files within the root apis.zip
 	for _, file := range zipReader.File {
 		// open the zip files
-		logger.LoggerSync.Info("File :", file.Name)
-
 		if strings.HasSuffix(file.Name, zipExt) {
-			logger.LoggerSync.Info("File ZIP :", file.Name)
-
 			logger.LoggerSync.Debugf("Starting zip reading: %v", file.Name)
 			// Open thezip
 			f, err := file.Open()

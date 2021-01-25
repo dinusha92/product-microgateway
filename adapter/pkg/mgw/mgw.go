@@ -152,14 +152,13 @@ OUTER:
 // fetch APIs from control plane during the server start up and push them
 // to the router and enforcer components.
 func fetchAPIsOnStartUp(conf *config.Config) {
-	// Checking the envrionments to fetch the APIs from
 	// NOTE: Currently controle plane API does not support multiple labels in the same
 	// request. Hence until that is fixed, we have to make seperate requests.
+	// Checking the envrionments to fetch the APIs from
 	envs := conf.ControlPlane.EventHub.EnvironmentLabels
+	// Create a channel for the byte slice (response from the APIs from control plane)
 	c := make(chan []byte)
 	if len(envs) > 0 {
-		logger.LoggerMgw.Infof("Environments label present: %v", envs)
-
 		logger.LoggerMgw.Debug("Environments label present: %v", envs)
 		for _, env := range envs {
 			go synchronizer.FetchAPIs(nil, &env, c)
@@ -174,8 +173,6 @@ func fetchAPIsOnStartUp(conf *config.Config) {
 		data := <-c
 		logger.LoggerMgw.Debug("Receing data for an envrionment: %v", string(data))
 		if data != nil {
-			logger.LoggerMgw.Info("Pushing data for an envrionment: %v", string(data))
-
 			logger.LoggerMgw.Debug("Pushing data to envoy and enforcer")
 			err := synchronizer.PushAPIProjects(data)
 			if err != nil {
@@ -183,14 +180,4 @@ func fetchAPIsOnStartUp(conf *config.Config) {
 			}
 		}
 	}
-	// TO BE REMOVED:
-	// data, err := synchronizer.FetchAPIs()
-	// if err != nil {
-	// 	logger.LoggerMgw.Errorf("Error fetching APIs from Control Plane: %v", err)
-	// } else {
-	// 	err := synchronizer.PushAPIProjects(data)
-	// 	if err != nil {
-	// 		logger.LoggerMgw.Errorf("Error occurred while pushing API data: %v ", err)
-	// 	}
-	// }
 }
