@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+ *  Copyright (c) 2021, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/tls"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -50,8 +51,9 @@ const (
 // FetchAPIs pulls the API artifact calling to the API manager
 // API Manager returns a .zip file as a response and this function
 // returns a byte slice of that ZIP file.
-func FetchAPIs(id *string, gwLabel *string, c chan []byte) {
+func FetchAPIs(id *string, gwLabel *string, c chan SyncAPIResponse) {
 	logger.LoggerSync.Info("Fetching APIs from Control Plane.")
+	respSyncAPI := SyncAPIResponse{}
 
 	//TODO: (@dinusha92) to handle HTTPS communication with control plane
 	// handle TLS
@@ -101,11 +103,13 @@ func FetchAPIs(id *string, gwLabel *string, c chan []byte) {
 	// If an API ID is present, make a query parameter
 	if id != nil {
 		logger.LoggerSync.Debugf("API ID: %v", *id)
+		respSyncAPI.APIID = *id
 		q.Add(apiID, *id)
 	}
 	// If the gateway label is present, make a query parameter
 	if gwLabel != nil {
 		logger.LoggerSync.Debugf("Gateway Label: %v", *gwLabel)
+		respSyncAPI.GatewayLabel = *gwLabel
 		q.Add(gatewayLabel, *gwLabel)
 	}
 	// Default "type" query parameter for adapter is "Envoy"
@@ -120,7 +124,9 @@ func FetchAPIs(id *string, gwLabel *string, c chan []byte) {
 	// If the error is not null, proceed
 	if err != nil {
 		logger.LoggerSync.Errorf("Error occurred while retrieving APIs from API manager: %v", err)
-		c <- nil
+		respSyncAPI.Err = err
+		respSyncAPI.Resp = nil
+		c <- respSyncAPI
 		return
 	}
 
@@ -130,18 +136,24 @@ func FetchAPIs(id *string, gwLabel *string, c chan []byte) {
 	// If the reading response gives an error
 	if err != nil {
 		logger.LoggerSync.Errorf("Error occurred while reading the response: %v", err)
-		c <- nil
+		respSyncAPI.Err = err
+		respSyncAPI.Resp = nil
+		c <- respSyncAPI
 		return
 	}
 	// For successful response, return the byte slice and nil as error
 	if resp.StatusCode == http.StatusOK {
-		c <- respBytes
+		respSyncAPI.Err = nil
+		respSyncAPI.Resp = respBytes
+		c <- respSyncAPI
 		return
 	}
 	// If the response is not successful, create a new error with the response and log it and return
 	// Ex: for 401 scenarios, 403 scenarios.
 	logger.LoggerSync.Errorf("Failure response: %v", string(respBytes))
-	c <- nil
+	respSyncAPI.Err = errors.New(string(respBytes))
+	respSyncAPI.Resp = nil
+	c <- respSyncAPI
 	return
 }
 

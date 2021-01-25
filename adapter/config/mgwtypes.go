@@ -166,11 +166,12 @@ type APICtlUser struct {
 // ControlPlane struct contains information related to the API Manager
 type ControlPlane struct {
 	EventHub struct {
-		ServiceURL              string   `toml:"serviceUrl"`
-		Username                string   `toml:"username"`
-		Password                string   `toml:"password"`
-		SyncApisOnStartUp       bool     `toml:"syncApisOnStartUp"`
-		EnvironmentLabels       []string `toml:"environmentLabels"`
+		ServiceURL              string        `toml:"serviceUrl"`
+		Username                string        `toml:"username"`
+		Password                string        `toml:"password"`
+		SyncApisOnStartUp       bool          `toml:"syncApisOnStartUp"`
+		EnvironmentLabels       []string      `toml:"environmentLabels"`
+		RetryInterval           time.Duration `toml:"retryInterval"`
 		JmsConnectionParameters struct {
 			EventListeningEndpoints string `toml:"eventListeningEndpoints"`
 		} `toml:"jmsConnectionParameters"`

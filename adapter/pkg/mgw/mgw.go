@@ -31,6 +31,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/wso2/micro-gw/config"
@@ -157,7 +158,7 @@ func fetchAPIsOnStartUp(conf *config.Config) {
 	// Checking the envrionments to fetch the APIs from
 	envs := conf.ControlPlane.EventHub.EnvironmentLabels
 	// Create a channel for the byte slice (response from the APIs from control plane)
-	c := make(chan []byte)
+	c := make(chan synchronizer.SyncAPIResponse)
 	if len(envs) > 0 {
 		logger.LoggerMgw.Debug("Environments label present: %v", envs)
 		for _, env := range envs {
@@ -169,15 +170,25 @@ func fetchAPIsOnStartUp(conf *config.Config) {
 		go synchronizer.FetchAPIs(nil, nil, c)
 	}
 
-	for range envs {
+	for i := 0; i < len(envs); i++ {
 		data := <-c
-		logger.LoggerMgw.Debug("Receing data for an envrionment: %v", string(data))
-		if data != nil {
+		logger.LoggerMgw.Debug("Receing data for an envrionment: %v", string(data.Resp))
+		if data.Resp != nil {
 			logger.LoggerMgw.Debug("Pushing data to envoy and enforcer")
-			err := synchronizer.PushAPIProjects(data)
+			err := synchronizer.PushAPIProjects(data.Resp)
 			if err != nil {
 				logger.LoggerMgw.Errorf("Error occurred while pushing API data: %v ", err)
 			}
+		} else {
+			// Keep the iteration still until all the envrionment response properly.
+			i--
+			logger.LoggerMgw.Errorf("Error occurred while fetching data from control plane: %v", data.Err)
+			go func(d synchronizer.SyncAPIResponse) {
+				// Retry fetching from control plane
+				time.Sleep(conf.ControlPlane.EventHub.RetryInterval * time.Second)
+				logger.LoggerMgw.Infof("Retrying to fetch API data from control plane.")
+				synchronizer.FetchAPIs(&d.APIID, &d.GatewayLabel, c)
+			}(data)
 		}
 	}
 }

@@ -91,6 +91,7 @@ username="admin"
 password="admin"
 syncApisOnStartUp = true
 environmentLabels = []
+retryInterval = 5
 # Message broker connection URL of the control plane
 [controlPlane.eventHub.jmsConnectionParameters]
 eventListeningEndpoints = "amqp://admin:admin@carbon/carbon?brokerlist='tcp://localhost:5672'"
