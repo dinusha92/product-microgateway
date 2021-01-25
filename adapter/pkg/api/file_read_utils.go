@@ -37,7 +37,7 @@ import (
 // API Controller related constants
 const (
 	openAPIDir            string = "Definitions"
-	openAPIFilename       string = "swagger.yaml"
+	openAPIFilename       string = "swagger."
 	apiDefinitionFilename string = "api.yaml"
 	endpointCertDir       string = "Endpoint-certificates"
 	crtExtension          string = ".crt"
@@ -62,15 +62,15 @@ func ApplyAPIProject(payload []byte) error {
 		loggers.LoggerAPI.Errorf("Error occured while unzipping the apictl project. Error: %v", err.Error())
 		return err
 	}
-	loggers.LoggerAPI.Info("Error", err)
+	loggers.LoggerAPI.Info("File reading now:")
 	// TODO: (VirajSalaka) this won't support for distributed openAPI definition
 	for _, file := range zipReader.File {
-		loggers.LoggerAPI.Info("root  file :", file.Name)
+		loggers.LoggerAPI.Debugf("File reading now: %v", file.Name)
+		loggers.LoggerAPI.Infof("File reading now: %v", file.Name)
 
-		if strings.HasSuffix(file.Name, openAPIDir+string(os.PathSeparator)+openAPIFilename) ||
-			strings.HasSuffix(file.Name, openAPIDir+string(os.PathSeparator)+"swagger.json") {
+		if strings.Contains(file.Name, openAPIDir+string(os.PathSeparator)+openAPIFilename) {
 			loggers.LoggerAPI.Debugf("openAPI file : %v", file.Name)
-			loggers.LoggerAPI.Info("1st cond openAPI file :", file.Name)
+			loggers.LoggerAPI.Infof("OpenAPI: %v", file.Name)
 
 			unzippedFileBytes, err := readZipFile(file)
 			if err != nil {
@@ -84,8 +84,6 @@ func ApplyAPIProject(payload []byte) error {
 			}
 		} else if strings.Contains(file.Name, endpointCertDir+string(os.PathSeparator)) &&
 			(strings.HasSuffix(file.Name, crtExtension) || strings.HasSuffix(file.Name, pemExtension)) {
-			loggers.LoggerAPI.Info("2nd cond openAPI file :", file.Name)
-
 			unzippedFileBytes, err := readZipFile(file)
 			if err != nil {
 				loggers.LoggerAPI.Errorf("Error occured while reading the endpoint certificate : %v, %v", file.Name, err.Error())
@@ -101,8 +99,6 @@ func ApplyAPIProject(payload []byte) error {
 			upstreamCerts = append(upstreamCerts, unzippedFileBytes...)
 			upstreamCerts = append(upstreamCerts, newLineByteArray...)
 		} else if strings.Contains(file.Name, apiDefinitionFilename) {
-			loggers.LoggerAPI.Info("3rd cond openAPI file :", file.Name)
-
 			loggers.LoggerAPI.Debugf("fileName : %v", file.Name)
 			unzippedFileBytes, err := readZipFile(file)
 			if err != nil {
@@ -132,8 +128,6 @@ func ApplyAPIProject(payload []byte) error {
 		// TODO : (LahiruUdayanga) Handle the default behaviour after when the APIDeployTestCase test is fixed.
 		apiType = mgw.HTTP
 		xds.UpdateAPI(swaggerJsn, upstreamCerts, apiType)
-		loggers.LoggerAPI.Info("Before updating envoy file :", swaggerJsn)
-		// xds.UpdateEnvoy(swaggerJsn, upstreamCerts, apiType)
 		loggers.LoggerAPI.Infof("API type is not currently supported with WSO2 micro-gateway")
 	}
 	return nil

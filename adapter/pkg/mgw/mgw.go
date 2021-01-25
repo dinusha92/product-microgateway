@@ -19,9 +19,6 @@
 package mgw
 
 import (
-	"errors"
-	"log"
-
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	xdsv3 "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	apiservice "github.com/envoyproxy/go-control-plane/wso2/discovery/service/api"
@@ -35,16 +32,10 @@ import (
 	"os"
 	"os/signal"
 
-	"archive/zip"
-	"bytes"
-	"crypto/tls"
-	"io/ioutil"
-	"net/http"
-	"strings"
-
 	"github.com/fsnotify/fsnotify"
 	"github.com/wso2/micro-gw/config"
 	logger "github.com/wso2/micro-gw/loggers"
+	"github.com/wso2/micro-gw/pkg/synchronizer"
 	xds "github.com/wso2/micro-gw/pkg/xds"
 	"google.golang.org/grpc"
 )
@@ -130,16 +121,12 @@ func Run(conf *config.Config) {
 	// Set enforcer startup configs
 	xds.UpdateEnforcerConfig(conf)
 
-	barry, ferr := fetchAPIs()
-	if ferr != nil {
-		logger.LoggerMgw.Info("Error fetch APIs", ferr)
-	} else {
-		err := applyAPIProject(barry)
-		if err != nil {
-			logger.LoggerMgw.Info("Error occured while starting:!!!! ", err)
-		}
+	// Check if the API synchronization at start up is enabled
+	if conf.ControlPlane.EventHub.SyncApisOnStartUp {
+		logger.LoggerMgw.Debugf("Fetch APIs from Controle Plane enabled.")
+		fetchAPIsOnStartUp(conf)
 	}
-	logger.LoggerMgw.Info("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDD")
+
 	go restserver.StartRestServer(conf)
 OUTER:
 	for {
@@ -162,121 +149,48 @@ OUTER:
 	logger.LoggerMgw.Info("Bye!")
 }
 
-// fetchAPIs pulls the API artifact calling to the API manager
-// API Manager returns a .zip file as a response and this function
-// returns a byte array of that ZIP file.
-func fetchAPIs() ([]byte, error) {
-	// URL has to be taken from a config, config toml already has this
-	url := "https://172.17.0.1:9443/internal/data/v1/runtime-artifacts"
-	logger.LoggerMgw.Info("Starting URL ....")
+// fetch APIs from control plane during the server start up and push them
+// to the router and enforcer components.
+func fetchAPIsOnStartUp(conf *config.Config) {
+	// Checking the envrionments to fetch the APIs from
+	// NOTE: Currently controle plane API does not support multiple labels in the same
+	// request. Hence until that is fixed, we have to make seperate requests.
+	envs := conf.ControlPlane.EventHub.EnvironmentLabels
+	c := make(chan []byte)
+	if len(envs) > 0 {
+		logger.LoggerMgw.Infof("Environments label present: %v", envs)
 
-	insecure := false
-	// Create the request
-	//handle TLS
-	tr := &http.Transport{}
-	if !insecure {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		logger.LoggerMgw.Debug("Environments label present: %v", envs)
+		for _, env := range envs {
+			go synchronizer.FetchAPIs(nil, &env, c)
 		}
 	} else {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
-	// Configuring the http client
-	client := &http.Client{
-		Transport: tr,
+		logger.LoggerMgw.Debug("Environments label  NOT present. Hence adding \"default\"")
+		envs = append(envs, "default")
+		go synchronizer.FetchAPIs(nil, nil, c)
 	}
 
-	// create a HTTP request
-	req, err := http.NewRequest("GET", url, nil)
-	// Adding query parameters
-	q := req.URL.Query()
-	// todo: parameterized the queries
-	q.Add("gatewayLabel", "Production and Sandbox")
-	q.Add("type", "Envoy")
-	req.URL.RawQuery = q.Encode()
-	logger.LoggerMgw.Info("Starting query ....")
+	for range envs {
+		data := <-c
+		logger.LoggerMgw.Debug("Receing data for an envrionment: %v", string(data))
+		if data != nil {
+			logger.LoggerMgw.Info("Pushing data for an envrionment: %v", string(data))
 
-	// Setting authorization header
-	req.Header.Set("Authorization", "Basic YWRtaW46YWRtaW4")
-	// Make the request
-	resp, err := client.Do(req)
-	// In the event of a connection error, the error would not be nil, then return the error
-	// If the error is not null, proceed
-	if err != nil {
-		logger.LoggerMgw.Error("Error occurred while retrieving APIs from API manager:", err)
-		return nil, err
-	}
-	logger.LoggerMgw.Info(resp.StatusCode)
-
-	// For sucessful API retrieval, return the apis.zip in a form of byte array
-	respbytes, err := ioutil.ReadAll(resp.Body)
-
-	// If the reading response gives an error
-	if err != nil {
-		fmt.Println("Error occurred while reading the response.", err)
-		return nil, err
-	}
-	// For successful response, return the byte array and nil as error
-	if resp.StatusCode == http.StatusOK {
-		return respbytes, nil
-	}
-	// If the response is not successful, create a new error with the response and log it and return
-	// Ex: for 401 scenarios, 403 scenarios.
-	logger.LoggerMgw.Info("Failure response code:", resp.StatusCode)
-	logger.LoggerMgw.Info("Failure response:", string(respbytes))
-	return nil, errors.New(string(respbytes))
-}
-
-// applyAPIProject configure the envoy using the API project which takes as
-// an input in the form of a byte array.
-// If the updating envoy fails, it returns an error, if not error would be nil.
-func applyAPIProject(payload []byte) error {
-	// Readubg the root zip
-	zipReader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
-
-	if err != nil {
-		// loggers.LoggerAPI.Errorf("Error occured while unzipping the apictl project. Error: %v", err.Error())
-		return err
-	}
-
-	// Read the .zip files within the root apis.zip
-	for _, file := range zipReader.File {
-		// open the zip files
-		if strings.HasSuffix(file.Name, ".zip") {
-			fmt.Println(file.Name)
-			logger.LoggerMgw.Info("Starting zip reading ....", file.Name)
-
-			// Open thezip
-			f, err := file.Open()
-			logger.LoggerMgw.Info("Error zip reading ....", err)
-
+			logger.LoggerMgw.Debug("Pushing data to envoy and enforcer")
+			err := synchronizer.PushAPIProjects(data)
 			if err != nil {
-				return err
-			}
-			defer f.Close()
-			//read the files in a each xxxx-api.zip
-			r, err := ioutil.ReadAll(f)
-			nzip, err := zip.NewReader(bytes.NewReader(r), int64(len(r)))
-			for _, fl := range nzip.File {
-				fmt.Println(fl.Name)
-				logger.LoggerMgw.Info("Starting zip reading inside 1 ....", fl.Name)
-
-				if strings.HasSuffix(fl.Name, "Definitions/swagger.json") {
-					logger.LoggerMgw.Info("Starting zip reading inside ....", fl.Name)
-
-					t, err := fl.Open()
-					h, err := ioutil.ReadAll(t)
-					if err != nil {
-						log.Fatal(err)
-					}
-					logger.LoggerMgw.Info("updating zds ....", t)
-
-					xds.UpdateEnvoy(h)
-				}
+				logger.LoggerMgw.Errorf("Error occurred while pushing API data: %v ", err)
 			}
 		}
 	}
-	return nil
+	// TO BE REMOVED:
+	// data, err := synchronizer.FetchAPIs()
+	// if err != nil {
+	// 	logger.LoggerMgw.Errorf("Error fetching APIs from Control Plane: %v", err)
+	// } else {
+	// 	err := synchronizer.PushAPIProjects(data)
+	// 	if err != nil {
+	// 		logger.LoggerMgw.Errorf("Error occurred while pushing API data: %v ", err)
+	// 	}
+	// }
 }
