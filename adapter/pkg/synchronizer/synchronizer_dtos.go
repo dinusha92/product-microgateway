@@ -17,7 +17,7 @@
 /*
  * Package "synchronizer" contains artifacts relate to fetching APIs and
  * API related updates from the control plane event-hub.
- * This file contains operates to retrieve APIs and API updates.
+ * This file contains types to retrieve APIs and API updates.
  */
 
 package synchronizer

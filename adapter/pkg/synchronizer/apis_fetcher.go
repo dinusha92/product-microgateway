@@ -17,7 +17,7 @@
 /*
  * Package "synchronizer" contains artifacts relate to fetching APIs and
  * API related updates from the control plane event-hub.
- * This file contains operates to retrieve APIs and API updates.
+ * This file contains functions to retrieve APIs and API updates.
  */
 
 package synchronizer
@@ -26,6 +26,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io/ioutil"
 	"net/http"
@@ -46,6 +47,7 @@ const (
 	runtimeArtifactEndpoint string = "internal/data/v1/runtime-artifacts"
 	authorization           string = "Authorization"
 	zipExt                  string = ".zip"
+	defaultCertPath         string = "/home/wso2/security/controlplane.pem"
 )
 
 // FetchAPIs pulls the API artifact calling to the API manager
@@ -54,20 +56,6 @@ const (
 func FetchAPIs(id *string, gwLabel *string, c chan SyncAPIResponse) {
 	logger.LoggerSync.Info("Fetching APIs from Control Plane.")
 	respSyncAPI := SyncAPIResponse{}
-
-	//TODO: (@dinusha92) to handle HTTPS communication with control plane
-	// handle TLS
-	insecure := false
-	tr := &http.Transport{}
-	if !insecure {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	} else {
-		tr = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-	}
 
 	// Read configurations and derive the eventHub details
 	conf, errReadConfig := config.ReadConfigs()
@@ -88,7 +76,36 @@ func FetchAPIs(id *string, gwLabel *string, c chan SyncAPIResponse) {
 
 	ehUname := ehConfigs.Username
 	ehPass := ehConfigs.Password
-	basicAuth := "Basic " + auth.BasicAuth(ehUname, ehPass)
+	basicAuth := "Basic " + auth.GetBasicAuth(ehUname, ehPass)
+
+	// Check if TLS is enabled
+	tlsEnabled := ehConfigs.TLSEnabled
+	logger.LoggerSync.Debugf("TLS Enabled: %v", tlsEnabled)
+	tr := &http.Transport{}
+	if tlsEnabled {
+		// Read the cert from the defined path
+		certPath := ehConfigs.PublicCertPath
+		logger.LoggerSync.Infof("Reading the cert at %v", certPath)
+
+		if certPath == "" {
+			// If cert is defined, read the default cert path
+			logger.LoggerSync.Infof("Reading the defaul cert at %v", defaultCertPath)
+			certPath = defaultCertPath
+		}
+		caCert, err := ioutil.ReadFile(certPath)
+		if err != nil {
+			logger.LoggerSync.Errorf("Error occurred when readin the cert form %v : %v", certPath, err)
+		}
+		caCertPool := x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{RootCAs: caCertPool},
+		}
+	} else {
+		tr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
 
 	// Configuring the http client
 	client := &http.Client{
@@ -157,9 +174,10 @@ func FetchAPIs(id *string, gwLabel *string, c chan SyncAPIResponse) {
 	return
 }
 
-// PushAPIProjects configure the envoy using the API project which takes as
-// an input in the form of a byte slice.
-// If the updating envoy or enforcer, it returns an error, if not error would be nil.
+// PushAPIProjects configure the router and enforcer using the zip containing API project(s) as
+// byte slice. This method ensures to update the enforcer and router using entries inside the
+// downloaded apis.zip one by one.
+// If the updating envoy or enforcer fails, this method returns an error, if not error would be nil.
 func PushAPIProjects(payload []byte) error {
 	// Reading the root zip
 	zipReader, err := zip.NewReader(bytes.NewReader(payload), int64(len(payload)))
