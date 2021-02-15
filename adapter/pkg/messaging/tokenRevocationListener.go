@@ -30,6 +30,7 @@ func handleTokenRevocation(deliveries <-chan amqp.Delivery, done chan error) {
 	for d := range deliveries {
 		var notification EventTokenRevocationNotification
 		json.Unmarshal([]byte(string(d.Body)), &notification)
+		logger.LoggerMsg.Infof("REVOKED PAYLOAD %+v", notification)
 		logger.LoggerMsg.Printf("RevokedToken: %s, Token Type: %s", notification.Event.PayloadData.RevokedToken,
 			notification.Event.PayloadData.Type)
 

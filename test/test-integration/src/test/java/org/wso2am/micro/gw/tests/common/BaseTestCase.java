@@ -24,6 +24,7 @@ import org.json.JSONObject;
 import org.wso2am.micro.gw.tests.common.model.API;
 import org.wso2am.micro.gw.tests.common.model.ApplicationDTO;
 import org.wso2am.micro.gw.tests.common.model.SubscribedApiDTO;
+import org.wso2am.micro.gw.tests.context.APIManagerWithMgwServerInstance;
 import org.wso2am.micro.gw.tests.context.MgwServerInstance;
 import org.wso2am.micro.gw.tests.context.MicroGWTestException;
 import org.wso2am.micro.gw.tests.util.*;
@@ -39,6 +40,8 @@ import java.util.Arrays;
 public class BaseTestCase {
 
     protected MgwServerInstance microGWServer;
+    protected APIManagerWithMgwServerInstance apiManagerWithMgwServerInstance;
+
 
     /**
      * start the mgw docker environment and mock backend.
@@ -78,11 +81,29 @@ public class BaseTestCase {
     }
 
     /**
+     * start the mgw docker environment and mock backend.
+     *
+     * @param confPath   external conf.toml file location
+     * @param tlsEnabled true if the tls based backend server is required additionally
+     * @throws MicroGWTestException
+     * @throws IOException
+     */
+    public void startAPIMWithMGW(String confPath, boolean tlsEnabled) throws MicroGWTestException, IOException,
+            InterruptedException {
+        apiManagerWithMgwServerInstance = new APIManagerWithMgwServerInstance(confPath, tlsEnabled);
+        apiManagerWithMgwServerInstance.startMGW();
+    }
+
+    /**
      * stop the mgw docker environment.
      */
     public void stopMGW() {
         microGWServer.stopMGW();
 
+    }
+
+    public void stopAPIMWithMGW() {
+        apiManagerWithMgwServerInstance.stopMGW();
     }
 
     public static String getImportAPIServiceURLHttps(String servicePath) throws MalformedURLException {
