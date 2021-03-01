@@ -1,0 +1,8 @@
+  apim:
+    image: dinushad/wso2am:4.0.0-m6
+    ports:
+      - "9763:9763"
+      - "9443:9443"
+      - "5672:5672"
+    links:
+      - adapter
